@@ -1,16 +1,16 @@
 # LLM API Gateway
 
-A local API gateway for LLM providers. Sits in front of Ollama, OpenAI, and Anthropic. Enforces
-per-user rate limits via Redis, logs token usage and cost to PostgreSQL, and shows everything on
-a Streamlit dashboard.
+A local API gateway for LLM providers. It sits in front of Ollama, OpenAI, and Anthropic,
+enforces per-user rate limits with Redis, logs token usage and cost to PostgreSQL, and shows
+everything in a Streamlit dashboard.
 
-Runs entirely on Kubernetes (Minikube). No Docker Compose. No cloud.
+This setup is written for Windows with Docker Desktop, Minikube, Kubernetes, and Ollama.
 
 ---
 
 ## What's Inside
 
-```
+```text
 gateway/      FastAPI gateway service
 dashboard/    Streamlit dashboard
 k8s/          Kubernetes manifests
@@ -22,273 +22,177 @@ tests/        Unit tests
 
 ## Before You Start
 
-You need these installed:
+Install these first:
 
 - [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 - [Minikube](https://minikube.sigs.k8s.io/docs/start/)
 - [kubectl](https://kubernetes.io/docs/tasks/tools/)
 - [Python 3.10+](https://www.python.org/downloads/)
-- [Ollama](https://ollama.com/) — for free local LLM testing
+- [Ollama](https://ollama.com/)
 
-Verify Docker is running before anything else. Minikube won't start without it.
+Make sure Docker Desktop is running before starting Minikube.
 
 ---
 
-## Step 0 — Set Up Python Virtual Environment
+## Step 0 - Set Up Python
 
-Do this once before running tests or any local Python tooling.
-
-**macOS / Linux:**
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r gateway/requirements.txt
-pip install -r dashboard/requirements.txt
-pip install pytest
-```
-
-**Windows (PowerShell):**
+Open PowerShell in the project folder:
 
 ```powershell
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-pip install -r gateway/requirements.txt
-pip install -r dashboard/requirements.txt
-pip install pytest
+python -m venv venv; .\venv\Scripts\Activate.ps1; pip install -r gateway/requirements.txt; pip install -r dashboard/requirements.txt; pip install pytest
 ```
 
-You should see `(venv)` in your terminal prompt. All `python` and `pytest` commands below assume
-the venv is active. If you close the terminal, re-activate with `source venv/bin/activate`
-(macOS/Linux) or `.\venv\Scripts\Activate.ps1` (Windows).
+If you close the terminal later, reactivate the environment with:
+
+```powershell
+.\venv\Scripts\Activate.ps1
+```
 
 ---
 
-## Step 1 — Pull the Ollama Model
+## Step 1 - Start Ollama
 
-Ollama runs natively on your machine (not inside Kubernetes). Start it and pull the model:
+Start Ollama if it is not already running:
 
-```bash
+```powershell
 ollama serve
 ```
 
-Open a second terminal and pull the model:
+If you see a port `11434` already-in-use message, Ollama is already running. Open another terminal
+and pull the lightweight model:
 
-```bash
+```powershell
 ollama pull llama3.2:1b
 ```
 
-Verify it works:
+Verify Ollama:
 
-```bash
-curl http://localhost:11434/api/tags
+```powershell
+curl.exe http://localhost:11434/api/tags
 ```
 
-You should see `llama3.2:1b` in the list. Keep `ollama serve` running in the background for the
-rest of setup.
+You should see `llama3.2:1b` in the response.
 
 ---
 
-## Step 2 — Start Minikube
+## Step 2 - Start Minikube
 
-```bash
-minikube start --driver=docker --memory=4096 --cpus=2
-minikube addons enable ingress
-```
-
-Wait for the ingress addon to be ready:
-
-```bash
-kubectl wait --namespace ingress-nginx --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=120s
+```powershell
+minikube start --driver=docker --memory=4096 --cpus=2; minikube addons enable ingress; kubectl wait --namespace ingress-nginx --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=120s
 ```
 
 ---
 
-## Step 3 — Create the Secrets File
-
-```bash
-cp k8s/secrets.example.yaml k8s/secrets.yaml
-```
-
-**Windows (PowerShell):**
+## Step 3 - Create Secrets
 
 ```powershell
 Copy-Item k8s/secrets.example.yaml k8s/secrets.yaml
 ```
 
-Open `k8s/secrets.yaml`. For Ollama-only testing you can leave the API keys as placeholders.
-If you want to test OpenAI or Anthropic, add real keys here.
+For Ollama-only testing, you can leave the API keys as placeholders. If you want to test OpenAI
+or Anthropic, edit `k8s/secrets.yaml` and add real keys.
 
-> `k8s/secrets.yaml` is gitignored. Never commit it.
+`k8s/secrets.yaml` is gitignored. Do not commit it.
 
 ---
 
-## Step 4 — Apply Namespace, Config, and Secrets
+## Step 4 - Apply Config
 
-```bash
-kubectl apply -f k8s/namespace.yaml
-kubectl apply -f k8s/configmap.yaml
-kubectl apply -f k8s/secrets.yaml
+```powershell
+kubectl apply -f k8s/namespace.yaml; kubectl apply -f k8s/configmap.yaml; kubectl apply -f k8s/secrets.yaml
 ```
 
-Verify they applied:
+Verify:
 
-```bash
-kubectl get configmap -n llm-gateway
-kubectl get secret -n llm-gateway
+```powershell
+kubectl get configmap -n llm-gateway; kubectl get secret -n llm-gateway
 ```
 
 ---
 
-## Step 5 — Start Redis and PostgreSQL
+## Step 5 - Start Redis and PostgreSQL
 
-```bash
-kubectl apply -f k8s/redis/
-kubectl apply -f k8s/postgres/
+```powershell
+kubectl apply -f k8s/redis/; kubectl apply -f k8s/postgres/; kubectl wait --for=condition=ready pod -l app=postgres -n llm-gateway --timeout=90s; kubectl get pods -n llm-gateway
 ```
 
-Wait for Postgres to be fully ready before moving on — the gateway will fail to start if Postgres
-isn't up:
-
-```bash
-kubectl wait --for=condition=ready pod -l app=postgres -n llm-gateway --timeout=90s
-```
-
-Check both are running:
-
-```bash
-kubectl get pods -n llm-gateway
-```
-
-Both pods should show `Running` and `1/1` under READY.
+Redis and PostgreSQL should show `Running`.
 
 ---
 
-## Step 6 — Build and Load Images
+## Step 6 - Build and Load Images
 
-Minikube has its own internal Docker registry. You need to build images locally and load them
-into Minikube — they won't be pulled from Docker Hub.
+Minikube uses its own internal image store, so build the images locally and load them into
+Minikube:
 
-```bash
-docker build -t llm-gateway:latest ./gateway
-minikube image load llm-gateway:latest
-
-docker build -t llm-dashboard:latest ./dashboard
-minikube image load llm-dashboard:latest
+```powershell
+docker build -t llm-gateway:latest ./gateway; minikube image load llm-gateway:latest; docker build -t llm-dashboard:latest ./dashboard; minikube image load llm-dashboard:latest
 ```
 
-Verify the images are available inside Minikube:
+Verify:
 
-for cmd
-```bash
+```powershell
 minikube image ls | findstr llm
-```
-for linux
-```bash
-minikube image ls | grep llm
 ```
 
 You should see `llm-gateway:latest` and `llm-dashboard:latest`.
 
 ---
 
-## Step 7 — Deploy Gateway, Dashboard, and Ingress
+## Step 7 - Deploy the App
 
-```bash
-kubectl apply -f k8s/gateway/
-kubectl apply -f k8s/dashboard/
-kubectl apply -f k8s/ingress.yaml
+```powershell
+kubectl apply -f k8s/gateway/; kubectl apply -f k8s/dashboard/; kubectl apply -f k8s/ingress.yaml; kubectl wait --for=condition=ready pod -l app=gateway -n llm-gateway --timeout=60s; kubectl wait --for=condition=ready pod -l app=dashboard -n llm-gateway --timeout=60s; kubectl get pods -n llm-gateway
 ```
 
-Wait for everything to come up:
-
-```bash
-kubectl wait --for=condition=ready pod -l app=gateway -n llm-gateway --timeout=60s
-kubectl wait --for=condition=ready pod -l app=dashboard -n llm-gateway --timeout=60s
-```
-
-Check all pods one more time:
-
-```bash
-kubectl get pods -n llm-gateway
-```
-
-All pods — redis, postgres, gateway (x2), dashboard — should be `Running`.
+All pods should show `Running`.
 
 ---
 
-## Step 8 — Expose the Gateway Locally
+## Step 8 - Expose the App on Windows
 
-On macOS/Linux, use the Minikube ingress hostname.
+On Windows with Docker Desktop, use port forwarding instead of `llm-gateway.local`.
 
-Get your Minikube IP:
-
-```bash
-minikube ip
-```
-
-Add this line to your hosts file, replacing `<MINIKUBE_IP>` with the output above:
-
-```
-<MINIKUBE_IP>  llm-gateway.local
-```
-
-**macOS / Linux** — edit `/etc/hosts`:
-
-```bash
-echo "$(minikube ip) llm-gateway.local" | sudo tee -a /etc/hosts
-```
-
-Verify that the local DNS name resolves:
-
-```bash
-ping llm-gateway.local
-```
-
-The output should show `llm-gateway.local` resolving to your Minikube IP. It is okay if the
-ping request times out; the important part is that the hostname resolves to the correct IP.
-
-**Windows with Docker Desktop** — skip the hosts-file step and use port forwarding. This avoids
-Minikube Docker-driver networking issues where `llm-gateway.local` resolves correctly but
-`192.168.49.2:80` times out.
-
-Open a terminal and keep this command running:
+Open one terminal and keep this running:
 
 ```powershell
 kubectl -n llm-gateway port-forward svc/gateway-service 8000:8000
 ```
 
-Use this gateway URL on Windows:
+Your gateway URL is:
 
 ```text
 http://127.0.0.1:8000
 ```
 
-For the dashboard, open a second terminal and keep this command running:
+For the dashboard, open a second terminal and keep this running:
 
 ```powershell
 kubectl -n llm-gateway port-forward svc/dashboard-service 8501:8501
 ```
 
-Use this dashboard URL on Windows:
+Your dashboard URL is:
 
 ```text
 http://127.0.0.1:8501
 ```
 
+If port `8000` is already in use, a port-forward may already be running. You can test it directly
+or use another local port:
+
+```powershell
+kubectl -n llm-gateway port-forward svc/gateway-service 8080:8000
+```
+
+Then use `http://127.0.0.1:8080` for gateway requests.
+
 ---
 
-## Verifying Everything Works
+## Verify Everything
 
 ### Health Check
 
-**macOS / Linux:**
-
-```bash
-curl http://llm-gateway.local/health
-```
-
-**Windows:**
+Run this from a separate terminal while the gateway port-forward is running:
 
 ```powershell
 curl.exe http://127.0.0.1:8000/health
@@ -297,57 +201,24 @@ curl.exe http://127.0.0.1:8000/health
 Expected:
 
 ```json
-{"status": "ok", "redis": "ok", "db": "ok"}
-```
-
-If macOS/Linux gets a connection error, check that the ingress pod is running:
-
-```bash
-kubectl get pods -n ingress-nginx
-```
-
-If Windows says port `8000` is already in use, a port-forward is probably already running. Test
-`curl.exe http://127.0.0.1:8000/health` directly, or use another local port:
-
-```powershell
-kubectl -n llm-gateway port-forward svc/gateway-service 8080:8000
-```
-
-Then test from another terminal:
-
-```powershell
-curl.exe http://127.0.0.1:8080/health
+{"status":"ok","redis":"ok","db":"ok"}
 ```
 
 ---
 
-### Send a Chat Request (Ollama)
-
-```bash
-curl -X POST http://llm-gateway.local/v1/chat/completions \
-  -H "Authorization: Bearer test-api-key-1" \
-  -H "X-Team-ID: team-alpha" \
-  -H "Content-Type: application/json" \
-  -d '{"model": "llama3.2:1b", "messages": [{"role": "user", "content": "Hello"}]}'
-```
-
-**Windows (PowerShell):**
+### Send a Chat Request
 
 ```powershell
-curl.exe -X POST http://127.0.0.1:8000/v1/chat/completions `
-  -H "Authorization: Bearer test-api-key-1" `
-  -H "X-Team-ID: team-alpha" `
-  -H "Content-Type: application/json" `
-  -d '{\"model\":\"llama3.2:1b\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}'
+curl.exe -X POST http://127.0.0.1:8000/v1/chat/completions -H "Authorization: Bearer test-api-key-1" -H "X-Team-ID: team-alpha" -H "Content-Type: application/json" -d '{\"model\":\"llama3.2:1b\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}'
 ```
 
-You should get a JSON response from Ollama with a `choices` array.
+You should get a JSON response with a `choices` array.
 
 ---
 
-### Confirm Usage Was Logged in PostgreSQL
-Powershell
-```bash
+### Confirm Usage Was Logged
+
+```powershell
 kubectl exec -n llm-gateway deployment/postgres -- psql -U gateway -d gatewaydb -c "SELECT team_id, model_name, prompt_tokens, completion_tokens, cost_usd, status_code, created_at FROM request_logs ORDER BY created_at DESC LIMIT 5;"
 ```
 
@@ -357,32 +228,17 @@ You should see a row with `team-alpha` and `llama3.2:1b`.
 
 ### Test Rate Limiting
 
-The default limit is 100 requests per 60 seconds. Send 110 — the last batch should return `429`.
-
-**macOS / Linux:**
-
-```bash
-for i in $(seq 1 110); do
-  curl -s -o /dev/null -w "%{http_code}\n" \
-    -X POST http://llm-gateway.local/v1/chat/completions \
-    -H "Authorization: Bearer test-api-key-1" \
-    -H "X-Team-ID: team-alpha" \
-    -H "Content-Type: application/json" \
-    -d '{"model": "llama3.2:1b", "messages": [{"role": "user", "content": "ping"}]}'
-done
-```
-
-**Windows (PowerShell):**
+The default limit in `k8s/configmap.yaml` is now `3` requests per 60 seconds. Send 5 requests:
 
 ```powershell
-1..110 | ForEach-Object { curl.exe -s -o NUL -w "%{http_code}`n" -X POST http://127.0.0.1:8000/v1/chat/completions -H "Authorization: Bearer test-api-key-1" -H "X-Team-ID: team-alpha" -H "Content-Type: application/json" -d '{\"model\":\"llama3.2:1b\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}]}' }
+1..5 | ForEach-Object { curl.exe -s -o NUL -w "%{http_code}`n" -X POST http://127.0.0.1:8000/v1/chat/completions -H "Authorization: Bearer test-api-key-1" -H "X-Team-ID: team-alpha" -H "Content-Type: application/json" -d '{\"model\":\"llama3.2:1b\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}]}' }
 ```
 
-After ~100 requests you should start seeing `429` responses.
+You should see `200` for the first few requests, then `429` after the limit is reached.
 
 Verify violations were recorded:
 
-```bash
+```powershell
 kubectl exec -n llm-gateway deployment/postgres -- psql -U gateway -d gatewaydb -c "SELECT team_id, api_key, created_at FROM rate_limit_violations ORDER BY created_at DESC LIMIT 5;"
 ```
 
@@ -390,103 +246,76 @@ kubectl exec -n llm-gateway deployment/postgres -- psql -U gateway -d gatewaydb 
 
 ### Open the Dashboard
 
-Go to:
+Keep the dashboard port-forward running, then open:
 
-**macOS / Linux:**
-
-```
-http://llm-gateway.local/dashboard
-```
-
-**Windows:**
-
-```
+```text
 http://127.0.0.1:8501
 ```
 
-You should see four sections: Team Usage, Cost Breakdown, Request Volume, and Rate Limit
-Violations. The dashboard auto-refreshes every 30 seconds.
+The dashboard shows Team Usage, Cost Breakdown, Request Volume, and Rate Limit Violations.
+
+---
+
+## Change the Rate Limit
+
+The rate limit is controlled here:
+
+```yaml
+RATE_LIMIT_REQUESTS: "3"
+RATE_LIMIT_WINDOW_SECONDS: "60"
+```
+
+After editing `k8s/configmap.yaml`, you do not need to redeploy everything. Run only:
+
+```powershell
+kubectl apply -f k8s/configmap.yaml; kubectl rollout restart deployment/gateway -n llm-gateway; kubectl rollout status deployment/gateway -n llm-gateway
+```
+
+Then retry the health check:
+
+```powershell
+curl.exe http://127.0.0.1:8000/health
+```
 
 ---
 
 ## Run Unit Tests
 
-Make sure your venv is active (you should see `(venv)` in your prompt), then:
-
-```bash
-python -m pytest tests/ -v
-```
-
-**Windows (PowerShell) if `python` isn't on PATH:**
+Make sure your virtual environment is active:
 
 ```powershell
-.\venv\Scripts\python.exe -m pytest tests/ -v
+.\venv\Scripts\Activate.ps1; python -m pytest tests/ -v
 ```
-
-All 7 tests should pass.
 
 ---
 
 ## Rebuild After Code Changes
 
-If you edit gateway or dashboard code, rebuild and reload:
+If you edit gateway code:
 
-**Gateway:**
-
-```bash
-docker build -t llm-gateway:latest ./gateway
-minikube image load llm-gateway:latest
-kubectl rollout restart deployment/gateway -n llm-gateway
+```powershell
+docker build -t llm-gateway:latest ./gateway; minikube image load llm-gateway:latest; kubectl rollout restart deployment/gateway -n llm-gateway; kubectl rollout status deployment/gateway -n llm-gateway
 ```
 
-**Dashboard:**
+If you edit dashboard code:
 
-```bash
-docker build -t llm-dashboard:latest ./dashboard
-minikube image load llm-dashboard:latest
-kubectl rollout restart deployment/dashboard -n llm-gateway
-```
-
-Watch the rollout:
-
-```bash
-kubectl rollout status deployment/gateway -n llm-gateway
+```powershell
+docker build -t llm-dashboard:latest ./dashboard; minikube image load llm-dashboard:latest; kubectl rollout restart deployment/dashboard -n llm-gateway; kubectl rollout status deployment/dashboard -n llm-gateway
 ```
 
 ---
 
 ## Troubleshooting
 
-**Pods stuck in `ImagePullBackOff`**
+**Port `8000` is already in use**
 
-The image wasn't loaded into Minikube. Run:
-
-```bash
-minikube image load llm-gateway:latest
-kubectl rollout restart deployment/gateway -n llm-gateway
-```
-
-**`llm-gateway.local` not resolving on macOS/Linux**
-
-Your hosts file entry is missing or wrong. Double-check the IP with `minikube ip` and that the
-line in `/etc/hosts` matches exactly.
-
-**Windows cannot connect to `llm-gateway.local`**
-
-Use port forwarding instead of the Minikube ingress IP:
-
-```powershell
-kubectl -n llm-gateway port-forward svc/gateway-service 8000:8000
-```
-
-Then test from another terminal:
+The gateway port-forward may already be running. Try:
 
 ```powershell
 curl.exe http://127.0.0.1:8000/health
 ```
 
-If port `8000` is already in use, the port-forward may already be running. Use
-`curl.exe http://127.0.0.1:8000/health`, or forward a different local port:
+Or use a different local port:
 
 ```powershell
 kubectl -n llm-gateway port-forward svc/gateway-service 8080:8000
@@ -498,82 +327,66 @@ Then test from another terminal:
 curl.exe http://127.0.0.1:8080/health
 ```
 
-**Ollama unreachable from inside Minikube (Linux)**
+**Pods stuck in `ImagePullBackOff`**
 
-`host.minikube.internal` doesn't resolve on Linux with the Docker driver. Edit
-`k8s/configmap.yaml` and change `OLLAMA_BASE_URL` to:
+Reload the image into Minikube and restart the deployment:
 
+```powershell
+minikube image load llm-gateway:latest; kubectl rollout restart deployment/gateway -n llm-gateway
 ```
-http://172.17.0.1:11434
+
+**Ollama is unreachable**
+
+Check Ollama on Windows:
+
+```powershell
+curl.exe http://localhost:11434/api/tags
 ```
 
-Then reapply and restart:
+Then restart the gateway:
 
-```bash
-kubectl apply -f k8s/configmap.yaml
+```powershell
 kubectl rollout restart deployment/gateway -n llm-gateway
 ```
 
-**Postgres not ready**
+**Postgres is not ready**
 
-Check its logs:
-
-```bash
-kubectl logs -n llm-gateway deployment/postgres
+```powershell
+kubectl logs -n llm-gateway deployment/postgres; kubectl delete pod -n llm-gateway -l app=postgres
 ```
 
-If the init SQL failed, delete the postgres pod so it restarts and reruns the init script:
+**General debugging**
 
-```bash
-kubectl delete pod -n llm-gateway -l app=postgres
-```
-
-**General pod debugging:**
-
-```bash
-kubectl get pods -n llm-gateway
-kubectl describe pod <pod-name> -n llm-gateway
-kubectl logs -n llm-gateway deployment/gateway
-kubectl logs -n llm-gateway deployment/dashboard
-kubectl logs -n llm-gateway deployment/redis
+```powershell
+kubectl get pods -n llm-gateway; kubectl describe pod <pod-name> -n llm-gateway; kubectl logs -n llm-gateway deployment/gateway; kubectl logs -n llm-gateway deployment/dashboard; kubectl logs -n llm-gateway deployment/redis
 ```
 
 ---
 
 ## Useful Commands
 
-```bash
-# Checking all resources in the namespace
-kubectl get all -n llm-gateway
-
-# Checking ingress routing
-kubectl get ingress -n llm-gateway
-
-# Watching pods in real time
-kubectl get pods -n llm-gateway -w
-
-# Getting a shell inside the gateway pod
-kubectl exec -it -n llm-gateway deployment/gateway -- /bin/bash
+```powershell
+kubectl get all -n llm-gateway; kubectl get ingress -n llm-gateway; kubectl get pods -n llm-gateway -w; kubectl exec -it -n llm-gateway deployment/gateway -- /bin/bash
 ```
 
 ---
 
 ## Stop Everything
 
-Remove all project resources but keep Minikube running:
+Remove project resources but keep Minikube:
 
-```bash
+```powershell
 kubectl delete namespace llm-gateway
 ```
 
-Or stop Minikube entirely:
+Stop Minikube:
 
-```bash
+```powershell
 minikube stop
 ```
 
-To also free up disk space from images:
+Delete Minikube and free disk space:
 
-```bash
+```powershell
 minikube delete
 ```
