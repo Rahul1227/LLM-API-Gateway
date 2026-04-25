@@ -375,14 +375,7 @@ done
 **Windows (PowerShell):**
 
 ```powershell
-1..110 | ForEach-Object {
-  curl.exe -s -o NUL -w "%{http_code}`n" `
-    -X POST http://127.0.0.1:8000/v1/chat/completions `
-    -H "Authorization: Bearer test-api-key-1" `
-    -H "X-Team-ID: team-alpha" `
-    -H "Content-Type: application/json" `
-    -d '{\"model\":\"llama3.2:1b\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}]}'
-}
+1..110 | ForEach-Object { curl.exe -s -o NUL -w "%{http_code}`n" -X POST http://127.0.0.1:8000/v1/chat/completions -H "Authorization: Bearer test-api-key-1" -H "X-Team-ID: team-alpha" -H "Content-Type: application/json" -d '{\"model\":\"llama3.2:1b\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}]}' }
 ```
 
 After ~100 requests you should start seeing `429` responses.
@@ -390,9 +383,7 @@ After ~100 requests you should start seeing `429` responses.
 Verify violations were recorded:
 
 ```bash
-kubectl exec -n llm-gateway deployment/postgres -- \
-  psql -U gateway -d gatewaydb -c \
-  "SELECT team_id, api_key, created_at FROM rate_limit_violations ORDER BY created_at DESC LIMIT 5;"
+kubectl exec -n llm-gateway deployment/postgres -- psql -U gateway -d gatewaydb -c "SELECT team_id, api_key, created_at FROM rate_limit_violations ORDER BY created_at DESC LIMIT 5;"
 ```
 
 ---
