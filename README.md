@@ -238,8 +238,26 @@ Add this line to your hosts file, replacing `<MINIKUBE_IP>` with the output abov
 echo "$(minikube ip) llm-gateway.local" | sudo tee -a /etc/hosts
 ```
 
-**Windows** — open `C:\Windows\System32\drivers\etc\hosts` as Administrator and add the line
-manually.
+**Windows** — open **PowerShell as Administrator** and run:
+
+```powershell
+Add-Content -Path "C:\Windows\System32\drivers\etc\hosts" -Value "<MINIKUBE_IP> llm-gateway.local"
+```
+
+Example:
+
+```powershell
+Add-Content -Path "C:\Windows\System32\drivers\etc\hosts" -Value "192.168.49.2 llm-gateway.local"
+```
+
+Verify that the local DNS name resolves:
+
+```powershell
+ping llm-gateway.local
+```
+
+The output should show `llm-gateway.local` resolving to your Minikube IP. It is okay if the
+ping request times out; the important part is that the hostname resolves to the correct IP.
 
 ---
 
