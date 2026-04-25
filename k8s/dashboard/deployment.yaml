@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dashboard
+  namespace: llm-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dashboard
+  template:
+    metadata:
+      labels:
+        app: dashboard
+    spec:
+      containers:
+        - name: dashboard
+          image: llm-dashboard:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8501
+          command:
+            - streamlit
+            - run
+            - dashboard/app.py
+            - --server.address=0.0.0.0
+            - --server.port=8501
+            - --server.baseUrlPath=dashboard
+          envFrom:
+            - configMapRef:
+                name: gateway-config
+            - secretRef:
+                name: gateway-secrets
+          resources:
+            limits:
+              cpu: 500m
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi

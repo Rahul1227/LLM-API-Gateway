@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: dashboard-service
+  namespace: llm-gateway
+spec:
+  type: ClusterIP
+  selector:
+    app: dashboard
+  ports:
+    - port: 8501
+      targetPort: 8501

@@ -1,0 +1,8 @@
+venv/
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+k8s/secrets.yaml
+.env
+gateway.db
