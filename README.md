@@ -180,6 +180,11 @@ minikube image load llm-dashboard:latest
 
 Verify the images are available inside Minikube:
 
+for cmd
+```bash
+minikube image ls | findstr llm
+```
+for linux
 ```bash
 minikube image ls | grep llm
 ```
