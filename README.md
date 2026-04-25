@@ -390,3 +390,20 @@ Delete Minikube and free disk space:
 ```powershell
 minikube delete
 ```
+
+## Stop Ollama
+
+Find the process using port 11434 and kill it:
+
+```powershell
+taskkill /IM ollama.exe /F
+```
+
+
+Verify it stopped:
+
+```powershell
+curl.exe http://localhost:11434/api/tags
+```
+
+You should get a connection refused error, which means Ollama is no longer running.
