@@ -4,7 +4,7 @@ metadata:
   name: gateway-config
   namespace: llm-gateway
 data:
-  RATE_LIMIT_REQUESTS: "100"
+  RATE_LIMIT_REQUESTS: "3"
   RATE_LIMIT_WINDOW_SECONDS: "60"
   OLLAMA_BASE_URL: "http://host.minikube.internal:11434"
   REDIS_URL: "redis://redis-service:6379"
