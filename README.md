@@ -334,7 +334,11 @@ curl -X POST http://llm-gateway.local/v1/chat/completions \
 **Windows (PowerShell):**
 
 ```powershell
-kubectl exec -n llm-gateway deployment/postgres -- psql -U gateway -d gatewaydb -c "SELECT team_id, model_name, prompt_tokens, completion_tokens, cost_usd, status_code, created_at FROM request_logs ORDER BY created_at DESC LIMIT 5;"
+curl.exe -X POST http://127.0.0.1:8000/v1/chat/completions `
+  -H "Authorization: Bearer test-api-key-1" `
+  -H "X-Team-ID: team-alpha" `
+  -H "Content-Type: application/json" `
+  -d '{\"model\":\"llama3.2:1b\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}'
 ```
 
 You should get a JSON response from Ollama with a `choices` array.
@@ -342,12 +346,9 @@ You should get a JSON response from Ollama with a `choices` array.
 ---
 
 ### Confirm Usage Was Logged in PostgreSQL
-
+Powershell
 ```bash
-kubectl exec -n llm-gateway deployment/postgres -- \
-  psql -U gateway -d gatewaydb -c \
-  "SELECT team_id, model_name, prompt_tokens, completion_tokens, cost_usd, status_code, created_at
-   FROM request_logs ORDER BY created_at DESC LIMIT 5;"
+kubectl exec -n llm-gateway deployment/postgres -- psql -U gateway -d gatewaydb -c "SELECT team_id, model_name, prompt_tokens, completion_tokens, cost_usd, status_code, created_at FROM request_logs ORDER BY created_at DESC LIMIT 5;"
 ```
 
 You should see a row with `team-alpha` and `llama3.2:1b`.
