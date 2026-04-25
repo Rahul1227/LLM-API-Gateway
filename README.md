@@ -249,7 +249,7 @@ kubectl exec -n llm-gateway deployment/postgres -- psql -U gateway -d gatewaydb 
 Keep the dashboard port-forward running, then open:
 
 ```text
-http://127.0.0.1:8501
+http://127.0.0.1:8501/dashboard/
 ```
 
 The dashboard shows Team Usage, Cost Breakdown, Request Volume, and Rate Limit Violations.
