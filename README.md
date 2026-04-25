@@ -76,7 +76,6 @@ Open a second terminal and pull the model:
 
 ```bash
 ollama pull llama3.2:1b
-
 ```
 
 Verify it works:
@@ -85,8 +84,8 @@ Verify it works:
 curl http://localhost:11434/api/tags
 ```
 
-You should see `llama3` in the list. Keep `ollama serve` running in the background for the rest
-of setup.
+You should see `llama3.2:1b` in the list. Keep `ollama serve` running in the background for the
+rest of setup.
 
 ---
 
@@ -218,7 +217,9 @@ All pods — redis, postgres, gateway (x2), dashboard — should be `Running`.
 
 ---
 
-## Step 8 — Add Local DNS Entry
+## Step 8 — Expose the Gateway Locally
+
+On macOS/Linux, use the Minikube ingress hostname.
 
 Get your Minikube IP:
 
@@ -238,26 +239,42 @@ Add this line to your hosts file, replacing `<MINIKUBE_IP>` with the output abov
 echo "$(minikube ip) llm-gateway.local" | sudo tee -a /etc/hosts
 ```
 
-**Windows** — open **PowerShell as Administrator** and run:
-
-```powershell
-Add-Content -Path "C:\Windows\System32\drivers\etc\hosts" -Value "<MINIKUBE_IP> llm-gateway.local"
-```
-
-Example:
-
-```powershell
-Add-Content -Path "C:\Windows\System32\drivers\etc\hosts" -Value "192.168.49.2 llm-gateway.local"
-```
-
 Verify that the local DNS name resolves:
 
-```powershell
+```bash
 ping llm-gateway.local
 ```
 
 The output should show `llm-gateway.local` resolving to your Minikube IP. It is okay if the
 ping request times out; the important part is that the hostname resolves to the correct IP.
+
+**Windows with Docker Desktop** — skip the hosts-file step and use port forwarding. This avoids
+Minikube Docker-driver networking issues where `llm-gateway.local` resolves correctly but
+`192.168.49.2:80` times out.
+
+Open a terminal and keep this command running:
+
+```powershell
+kubectl -n llm-gateway port-forward svc/gateway-service 8000:8000
+```
+
+Use this gateway URL on Windows:
+
+```text
+http://127.0.0.1:8000
+```
+
+For the dashboard, open a second terminal and keep this command running:
+
+```powershell
+kubectl -n llm-gateway port-forward svc/dashboard-service 8501:8501
+```
+
+Use this dashboard URL on Windows:
+
+```text
+http://127.0.0.1:8501
+```
 
 ---
 
@@ -265,8 +282,16 @@ ping request times out; the important part is that the hostname resolves to the 
 
 ### Health Check
 
+**macOS / Linux:**
+
 ```bash
 curl http://llm-gateway.local/health
+```
+
+**Windows:**
+
+```powershell
+curl.exe http://127.0.0.1:8000/health
 ```
 
 Expected:
@@ -275,10 +300,23 @@ Expected:
 {"status": "ok", "redis": "ok", "db": "ok"}
 ```
 
-If you get a connection error, check that the ingress pod is running:
+If macOS/Linux gets a connection error, check that the ingress pod is running:
 
 ```bash
 kubectl get pods -n ingress-nginx
+```
+
+If Windows says port `8000` is already in use, a port-forward is probably already running. Test
+`curl.exe http://127.0.0.1:8000/health` directly, or use another local port:
+
+```powershell
+kubectl -n llm-gateway port-forward svc/gateway-service 8080:8000
+```
+
+Then test from another terminal:
+
+```powershell
+curl.exe http://127.0.0.1:8080/health
 ```
 
 ---
@@ -290,17 +328,17 @@ curl -X POST http://llm-gateway.local/v1/chat/completions \
   -H "Authorization: Bearer test-api-key-1" \
   -H "X-Team-ID: team-alpha" \
   -H "Content-Type: application/json" \
-  -d '{"model": "llama3", "messages": [{"role": "user", "content": "Hello"}]}'
+  -d '{"model": "llama3.2:1b", "messages": [{"role": "user", "content": "Hello"}]}'
 ```
 
 **Windows (PowerShell):**
 
 ```powershell
-curl.exe -X POST http://llm-gateway.local/v1/chat/completions `
+curl.exe -X POST http://127.0.0.1:8000/v1/chat/completions `
   -H "Authorization: Bearer test-api-key-1" `
   -H "X-Team-ID: team-alpha" `
   -H "Content-Type: application/json" `
-  -d '{\"model\":\"llama3\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}'
+  -d '{\"model\":\"llama3.2:1b\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}'
 ```
 
 You should get a JSON response from Ollama with a `choices` array.
@@ -316,7 +354,7 @@ kubectl exec -n llm-gateway deployment/postgres -- \
    FROM request_logs ORDER BY created_at DESC LIMIT 5;"
 ```
 
-You should see a row with `team-alpha` and `llama3`.
+You should see a row with `team-alpha` and `llama3.2:1b`.
 
 ---
 
@@ -333,7 +371,7 @@ for i in $(seq 1 110); do
     -H "Authorization: Bearer test-api-key-1" \
     -H "X-Team-ID: team-alpha" \
     -H "Content-Type: application/json" \
-    -d '{"model": "llama3", "messages": [{"role": "user", "content": "ping"}]}'
+    -d '{"model": "llama3.2:1b", "messages": [{"role": "user", "content": "ping"}]}'
 done
 ```
 
@@ -342,11 +380,11 @@ done
 ```powershell
 1..110 | ForEach-Object {
   curl.exe -s -o NUL -w "%{http_code}`n" `
-    -X POST http://llm-gateway.local/v1/chat/completions `
+    -X POST http://127.0.0.1:8000/v1/chat/completions `
     -H "Authorization: Bearer test-api-key-1" `
     -H "X-Team-ID: team-alpha" `
     -H "Content-Type: application/json" `
-    -d '{\"model\":\"llama3\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}]}'
+    -d '{\"model\":\"llama3.2:1b\",\"messages\":[{\"role\":\"user\",\"content\":\"ping\"}]}'
 }
 ```
 
@@ -366,8 +404,16 @@ kubectl exec -n llm-gateway deployment/postgres -- \
 
 Go to:
 
+**macOS / Linux:**
+
 ```
 http://llm-gateway.local/dashboard
+```
+
+**Windows:**
+
+```
+http://127.0.0.1:8501
 ```
 
 You should see four sections: Team Usage, Cost Breakdown, Request Volume, and Rate Limit
@@ -432,10 +478,37 @@ minikube image load llm-gateway:latest
 kubectl rollout restart deployment/gateway -n llm-gateway
 ```
 
-**`llm-gateway.local` not resolving**
+**`llm-gateway.local` not resolving on macOS/Linux**
 
 Your hosts file entry is missing or wrong. Double-check the IP with `minikube ip` and that the
 line in `/etc/hosts` matches exactly.
+
+**Windows cannot connect to `llm-gateway.local`**
+
+Use port forwarding instead of the Minikube ingress IP:
+
+```powershell
+kubectl -n llm-gateway port-forward svc/gateway-service 8000:8000
+```
+
+Then test from another terminal:
+
+```powershell
+curl.exe http://127.0.0.1:8000/health
+```
+
+If port `8000` is already in use, the port-forward may already be running. Use
+`curl.exe http://127.0.0.1:8000/health`, or forward a different local port:
+
+```powershell
+kubectl -n llm-gateway port-forward svc/gateway-service 8080:8000
+```
+
+Then test from another terminal:
+
+```powershell
+curl.exe http://127.0.0.1:8080/health
+```
 
 **Ollama unreachable from inside Minikube (Linux)**
 
