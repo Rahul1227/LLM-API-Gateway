@@ -75,7 +75,8 @@ ollama serve
 Open a second terminal and pull the model:
 
 ```bash
-ollama pull llama3
+ollama pull llama3.2:1b
+
 ```
 
 Verify it works:
