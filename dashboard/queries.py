@@ -25,12 +25,16 @@ def get_cost_by_model(conn, team_id: str | None, start_date: date, end_date: dat
         SELECT
             team_id,
             model_name,
-            COALESCE(SUM(cost_usd), 0) AS cost_usd
+            COUNT(*) AS request_count,
+            COALESCE(SUM(cost_usd), 0) AS total_cost_usd,
+            ROUND(COALESCE(AVG(cost_usd), 0), 6) AS avg_cost_per_request,
+            COALESCE(SUM(prompt_tokens + completion_tokens), 0) AS total_tokens,
+            ROUND(COALESCE(SUM(cost_usd) / NULLIF(SUM(prompt_tokens + completion_tokens), 0), 0), 8) AS cost_per_token
         FROM request_logs
         WHERE created_at::date BETWEEN %s AND %s
           AND (%s IS NULL OR team_id = %s)
         GROUP BY team_id, model_name
-        ORDER BY cost_usd DESC
+        ORDER BY total_cost_usd DESC
     """
     return pd.read_sql_query(query, conn, params=(start_date, end_date, team_id, team_id))
 

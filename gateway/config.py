@@ -17,4 +17,5 @@ TOKEN_COSTS: dict[str, tuple[float, float]] = {
     "gpt-4o": (0.005, 0.015),
     "gpt-3.5-turbo": (0.0005, 0.0015),
     "claude-3-5-sonnet": (0.003, 0.015),
+    "llama3.2:1b": (0.00001, 0.00002),  # Local Ollama model - nominal pricing
 }
